@@ -1,0 +1,18 @@
+# Infraestructura como código: define el servidor de la API en Render.
+services:
+  - type: web
+    name: mitienda-api
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    # El despliegue lo dispara el pipeline de Azure DevOps (después de las
+    # pruebas), no cada push. Por eso el autodeploy va apagado.
+    autoDeploy: false
+    envVars:
+      - key: FIREBASE_PROJECT_ID
+        value: mitienda-ee0e8
+      - key: CORS_ORIGINS
+        value: https://mitienda-ee0e8.web.app,https://mitienda-ee0e8.firebaseapp.com
+      # El secreto NO va aquí. Se escribe a mano en el panel de Render.
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
