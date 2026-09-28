@@ -1,0 +1,71 @@
+# Pipeline de integración continua de mitienda-api (Azure Pipelines)
+# Etapa 3 de la AA3: prueba de integración con Azure DevOps.
+
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  imageName: mitienda-api
+
+stages:
+  - stage: CI
+    displayName: Pruebas y contenedor
+    jobs:
+      - job: build_test
+        displayName: Instalar, probar y probar el contenedor
+        steps:
+          - task: NodeTool@0
+            displayName: Usar Node.js 20
+            inputs:
+              versionSpec: "20.x"
+
+          - script: npm ci
+            displayName: Instalar dependencias
+
+          - script: npm test
+            displayName: Pruebas automáticas (node --test)
+
+          - script: docker build -t $(imageName):$(Build.BuildId) .
+            displayName: Construir imagen Docker
+
+          - script: |
+              docker run -d --name api-test -p 8080:8080 $(imageName):$(Build.BuildId)
+              for i in 1 2 3 4 5 6 7 8 9 10; do
+                curl -fs http://localhost:8080/health && exit 0
+                sleep 2
+              done
+              docker logs api-test
+              exit 1
+            displayName: Prueba de integración - el contenedor responde en /health
+
+  # Etapa de despliegue: descomentar cuando exista en Azure el Container Registry
+  # y el servicio donde correrá la API, y esté creada la "service connection".
+  # - stage: Deploy
+  #   displayName: Desplegar en Azure
+  #   dependsOn: CI
+  #   condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+  #   jobs:
+  #     - job: deploy
+  #       steps:
+  #         - task: Docker@2
+  #           inputs:
+  #             containerRegistry: "<service-connection-acr>"
+  #             repository: "$(imageName)"
+  #             command: buildAndPush
+  #             Dockerfile: Dockerfile
+  #             tags: $(Build.BuildId)
+  #         - task: AzureWebAppContainer@1
+  #           inputs:
+  #             azureSubscription: "<service-connection-azure>"
+  #             appName: "<nombre-del-app-service>"
+  #             containers: "<registro>.azurecr.io/$(imageName):$(Build.BuildId)"
