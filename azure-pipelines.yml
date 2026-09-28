@@ -1,5 +1,5 @@
-# Pipeline de integración continua de mitienda-api (Azure Pipelines)
-# Etapa 3 de la AA3: prueba de integración con Azure DevOps.
+# Pipeline de mitienda-api (Azure Pipelines)
+# Etapa 3 de la AA3: prueba de integración y despliegue con Azure DevOps.
 
 trigger:
   branches:
@@ -12,7 +12,7 @@ pr:
       - main
 
 pool:
-  vmImage: ubuntu-latest
+  vmImage: ubuntu-24.04
 
 variables:
   imageName: mitienda-api
@@ -24,10 +24,10 @@ stages:
       - job: build_test
         displayName: Instalar, probar y probar el contenedor
         steps:
-          - task: NodeTool@0
+          - task: UseNode@1
             displayName: Usar Node.js 20
             inputs:
-              versionSpec: "20.x"
+              version: "20.x"
 
           - script: npm ci
             displayName: Instalar dependencias
@@ -48,24 +48,24 @@ stages:
               exit 1
             displayName: Prueba de integración - el contenedor responde en /health
 
-  # Etapa de despliegue: descomentar cuando exista en Azure el Container Registry
-  # y el servicio donde correrá la API, y esté creada la "service connection".
-  # - stage: Deploy
-  #   displayName: Desplegar en Azure
-  #   dependsOn: CI
-  #   condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
-  #   jobs:
-  #     - job: deploy
-  #       steps:
-  #         - task: Docker@2
-  #           inputs:
-  #             containerRegistry: "<service-connection-acr>"
-  #             repository: "$(imageName)"
-  #             command: buildAndPush
-  #             Dockerfile: Dockerfile
-  #             tags: $(Build.BuildId)
-  #         - task: AzureWebAppContainer@1
-  #           inputs:
-  #             azureSubscription: "<service-connection-azure>"
-  #             appName: "<nombre-del-app-service>"
-  #             containers: "<registro>.azurecr.io/$(imageName):$(Build.BuildId)"
+  - stage: Deploy
+    displayName: Desplegar en Render
+    dependsOn: CI
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))
+    jobs:
+      - job: deploy
+        displayName: Disparar despliegue y verificar
+        steps:
+          - script: |
+              curl -fsS -X POST "$RENDER_DEPLOY_HOOK"
+            displayName: Disparar despliegue en Render
+            env:
+              RENDER_DEPLOY_HOOK: $(RENDER_DEPLOY_HOOK)
+
+          - script: |
+              for i in $(seq 1 30); do
+                curl -fs "$(RENDER_URL)/health" && exit 0
+                sleep 10
+              done
+              exit 1
+            displayName: Verificar que la API desplegada responde
