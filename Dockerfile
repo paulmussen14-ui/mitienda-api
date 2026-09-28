@@ -2,7 +2,6 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Primero solo los manifiestos: aprovecha la caché de capas de Docker
 COPY package*.json ./
 RUN npm ci --omit=dev
 

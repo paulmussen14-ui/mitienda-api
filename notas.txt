@@ -1,0 +1,11 @@
+https://mitienda-api-dcd6.onrender.com
+({"correcto":false,"error":"Ruta no encontrada."})
+
+///
+GET /health
+POST /pedidos
+POST /pedidos/:id/venta
+///
+
+https://mitienda-api-dcd6.onrender.com/health
+({"estado":"ok","servicio":"mitienda-api"})
