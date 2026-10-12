@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { crearPedido, registrarVenta } from "./pedidos.js";
-import { requerirUsuarioNegocio } from "./autenticacion.js";
+import { requerirUsuarioNegocio, requerirCliente } from "./autenticacion.js";
 import { ErrorApi } from "./errores.js";
 
 export function crearApp() {
@@ -20,14 +20,14 @@ export function crearApp() {
     res.json({ estado: "ok", servicio: "mitienda-api" });
   });
 
-  // El cliente (sin login todavía) se identifica con negocio_id + cliente_id, igual que el carrito.
-  app.post("/pedidos", async (req, res, next) => {
+  // El cliente se identifica con su token de Firebase: el cliente_id sale del token, no del body.
+  app.post("/pedidos", requerirCliente, async (req, res, next) => {
     try {
-      const { negocio_id, cliente_id } = req.body || {};
-      if (!negocio_id || !cliente_id) {
-        throw new ErrorApi(400, "Faltan negocio_id y/o cliente_id.");
+      const { negocio_id } = req.body || {};
+      if (!negocio_id) {
+        throw new ErrorApi(400, "Falta negocio_id.");
       }
-      const resultado = await crearPedido({ negocioId: negocio_id, clienteId: cliente_id });
+      const resultado = await crearPedido({ negocioId: negocio_id, clienteId: req.cliente.uid });
       res.status(201).json({ correcto: true, ...resultado });
     } catch (error) {
       next(error);

@@ -19,13 +19,22 @@ test("GET /health responde ok", async () => {
   assert.deepEqual(await res.json(), { estado: "ok", servicio: "mitienda-api" });
 });
 
-test("POST /pedidos sin datos devuelve 400", async () => {
+test("POST /pedidos sin token devuelve 401", async () => {
   const res = await fetch(`${base}/pedidos`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({}),
+    body: JSON.stringify({ negocio_id: "n1" }),
   });
-  assert.equal(res.status, 400);
+  assert.equal(res.status, 401);
+});
+
+test("POST /pedidos ignora un cliente_id enviado en el body (sigue exigiendo token)", async () => {
+  const res = await fetch(`${base}/pedidos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ negocio_id: "n1", cliente_id: "otra-persona" }),
+  });
+  assert.equal(res.status, 401);
 });
 
 test("POST /pedidos/:id/venta sin token devuelve 401", async () => {
