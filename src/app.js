@@ -8,9 +8,11 @@ import { middlewareMonitoreo, estadoSalud, metricasPrometheus } from "./monitore
 
 export function crearApp() {
   const app = express();
-  // Render pone proxies internos (IPs privadas 10.x) delante: se confía en ellos para que req.ip
-  // sea la primera IP pública de la cadena y no la del proxy.
-  app.set("trust proxy", "loopback, linklocal, uniquelocal");
+  // Entre el cliente y la API hay 3 saltos de confianza: el proxy interno de Render (10.x), otro
+  // salto interno (10.x) y la capa pública de Cloudflare (162.159.x). Se confía en 3 saltos para que
+  // req.ip sea la IP real del cliente (4.ª de la cadena) y no la de Cloudflare. Se cuenta desde la
+  // derecha, así que una IP falsa que el cliente anteponga en X-Forwarded-For no cambia el resultado.
+  app.set("trust proxy", 3);
 
   const origenes = (
     process.env.CORS_ORIGINS ||
