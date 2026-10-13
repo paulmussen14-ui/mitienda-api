@@ -25,8 +25,10 @@ export function crearApp() {
 
   // Métricas en formato Prometheus (Grafana Cloud / Prometheus las leen con scrape).
   app.get("/metrics", (req, res) => {
-    const token = process.env.METRICS_TOKEN;
-    if (token && req.headers.authorization !== `Bearer ${token}`) {
+    // trim(): al copiar y pegar el token suelen colarse espacios o saltos de línea al final.
+    const token = (process.env.METRICS_TOKEN || "").trim();
+    const recibido = (req.headers.authorization || "").replace(/^Bearer\s+/i, "").trim();
+    if (token && recibido !== token) {
       return res.status(401).json({ correcto: false, error: "No autorizado." });
     }
     res.type("text/plain; version=0.0.4").send(metricasPrometheus());
