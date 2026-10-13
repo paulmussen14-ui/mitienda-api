@@ -4,6 +4,7 @@ import { crearPedido, registrarVenta } from "./pedidos.js";
 import { requerirUsuarioNegocio, requerirCliente } from "./autenticacion.js";
 import { ErrorApi } from "./errores.js";
 import { validarCheckout } from "./checkout.js";
+import { middlewareMonitoreo, estadoSalud, metricasPrometheus } from "./monitoreo.js";
 
 export function crearApp() {
   const app = express();
@@ -15,10 +16,20 @@ export function crearApp() {
 
   app.use(cors({ origin: origenes }));
   app.use(express.json());
+  app.use(middlewareMonitoreo);
 
   // Usado por Docker, Azure y el pipeline para comprobar que el servicio está arriba.
   app.get("/health", (_req, res) => {
-    res.json({ estado: "ok", servicio: "mitienda-api" });
+    res.json(estadoSalud());
+  });
+
+  // Métricas en formato Prometheus (Grafana Cloud / Prometheus las leen con scrape).
+  app.get("/metrics", (req, res) => {
+    const token = process.env.METRICS_TOKEN;
+    if (token && req.headers.authorization !== `Bearer ${token}`) {
+      return res.status(401).json({ correcto: false, error: "No autorizado." });
+    }
+    res.type("text/plain; version=0.0.4").send(metricasPrometheus());
   });
 
   // El cliente se identifica con su token de Firebase: el cliente_id sale del token, no del body.

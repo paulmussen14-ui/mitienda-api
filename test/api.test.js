@@ -16,7 +16,21 @@ after(() => servidor.close());
 test("GET /health responde ok", async () => {
   const res = await fetch(`${base}/health`);
   assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), { estado: "ok", servicio: "mitienda-api" });
+  const cuerpo = await res.json();
+  assert.equal(cuerpo.estado, "ok");
+  assert.equal(cuerpo.servicio, "mitienda-api");
+  assert.ok(cuerpo.ambiente);
+  assert.ok(cuerpo.uptime_segundos >= 0);
+});
+
+test("GET /metrics expone métricas Prometheus y cuenta las peticiones", async () => {
+  await fetch(`${base}/pedidos/abc/venta`, { method: "POST" }); // genera un 401
+  const res = await fetch(`${base}/metrics`);
+  assert.equal(res.status, 200);
+  const texto = await res.text();
+  assert.match(texto, /# TYPE mitienda_peticiones_total counter/);
+  assert.match(texto, /ruta="\/pedidos\/:id\/venta",estado="401"\} 1/);
+  assert.match(texto, /mitienda_uptime_segundos/);
 });
 
 test("POST /pedidos sin token devuelve 401", async () => {

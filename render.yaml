@@ -9,6 +9,12 @@ services:
     # pruebas), no cada push. Por eso el autodeploy va apagado.
     autoDeploy: false
     envVars:
+      # Ambiente de trabajo (aparece en logs y métricas): desarrollo | produccion
+      - key: AMBIENTE
+        value: produccion
+      # Si se define, /metrics exige Authorization: Bearer <token>. Se escribe a mano en Render.
+      - key: METRICS_TOKEN
+        sync: false
       - key: FIREBASE_PROJECT_ID
         value: mitienda-ee0e8
       - key: CORS_ORIGINS
