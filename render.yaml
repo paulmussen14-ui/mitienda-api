@@ -16,6 +16,6 @@ services:
       # El secreto NO va aquí. Se escribe a mano en el panel de Render.
       - key: FIREBASE_SERVICE_ACCOUNT_JSON
         sync: false
-      # Pasar a "true" cuando el registro de clientes esté publicado en el frontend.
+      # true = solo clientes registrados (no anónimos) pueden crear pedidos.
       - key: EXIGIR_CLIENTE_REGISTRADO
-        value: "false"
+        value: "true"
