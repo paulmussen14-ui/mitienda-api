@@ -4,8 +4,12 @@ import { ErrorApi } from "./errores.js";
 
 /* CREAR PEDIDO (antes en js/cliente/pedidos.js)
    Convierte el carrito activo del cliente en un pedido. */
-export async function crearPedido({ negocioId, clienteId }) {
+export async function crearPedido({ negocioId, clienteId, entrega, pago }) {
   const firestore = db();
+
+  // Datos de contacto del cliente registrado: se copian al pedido para que la tienda los vea.
+  const perfilSnap = await firestore.collection("clientes").doc(clienteId).get();
+  const perfil = perfilSnap.exists ? perfilSnap.data() : null;
 
   const carritos = await firestore
     .collection("carritos")
@@ -52,8 +56,12 @@ export async function crearPedido({ negocioId, clienteId }) {
     tx.set(pedidoRef, {
       numero_pedido: siguiente,
       cliente_id: clienteId,
+      cliente_nombre: perfil?.nombre || null,
+      cliente_telefono: perfil?.telefono || null,
       negocio_id: negocioId,
       detalle_pedido: detalle,
+      entrega: entrega || { tipo: "recojo", direccion: null, nota: null },
+      pago: pago || { metodo: "efectivo", estado: "Pendiente", simulado: true, referencia: null },
       estado: "Pendiente",
       fecha: FieldValue.serverTimestamp(),
       subtotal: total,

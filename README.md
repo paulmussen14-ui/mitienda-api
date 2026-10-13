@@ -8,7 +8,7 @@ Componente 2 de 3 de la solución (frontend, API y datos en Firestore).
 | Método | Ruta | Acceso | Qué hace |
 |---|---|---|---|
 | GET | /health | Público | Comprueba que el servicio está arriba |
-| POST | /pedidos | Cliente (Authorization: Bearer ID token de Firebase) | Convierte el carrito activo en pedido. Body: { "negocio_id": "..." }. El cliente se toma del token |
+| POST | /pedidos | Cliente (Authorization: Bearer ID token de Firebase) | Convierte el carrito activo en pedido. Body: { "negocio_id": "...", "entrega": { "tipo": "recojo\|delivery", "direccion": "...", "nota": "..." }, "pago": { "metodo": "efectivo\|yape\|plin\|tarjeta", "codigo_operacion": "...", "ultimos4": "..." } }. El cliente se toma del token. Los pagos son una simulación (no se cobra nada) |
 | POST | /pedidos/:id/venta | Personal del negocio (Authorization: Bearer ID token de Firebase) | Descuenta stock, registra el movimiento, crea la venta y marca el pedido como Entregado |
 
 ## Local

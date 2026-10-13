@@ -3,6 +3,7 @@ import cors from "cors";
 import { crearPedido, registrarVenta } from "./pedidos.js";
 import { requerirUsuarioNegocio, requerirCliente } from "./autenticacion.js";
 import { ErrorApi } from "./errores.js";
+import { validarCheckout } from "./checkout.js";
 
 export function crearApp() {
   const app = express();
@@ -27,7 +28,13 @@ export function crearApp() {
       if (!negocio_id) {
         throw new ErrorApi(400, "Falta negocio_id.");
       }
-      const resultado = await crearPedido({ negocioId: negocio_id, clienteId: req.cliente.uid });
+      const { entrega, pago } = validarCheckout(req.body);
+      const resultado = await crearPedido({
+        negocioId: negocio_id,
+        clienteId: req.cliente.uid,
+        entrega,
+        pago,
+      });
       res.status(201).json({ correcto: true, ...resultado });
     } catch (error) {
       next(error);
