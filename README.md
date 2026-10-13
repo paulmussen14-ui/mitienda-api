@@ -17,6 +17,7 @@ Componente 2 de 3 de la solución: frontend ([`mitienda`](https://github.com/pau
 | GET    | `/metrics`           | `Authorization: Bearer <METRICS_TOKEN>`                               | Métricas en formato Prometheus. Si `METRICS_TOKEN` no está definido, es público (solo recomendable en desarrollo) |
 | POST   | `/pedidos`           | Cliente registrado (`Authorization: Bearer <ID token de Firebase>`)   | Convierte el carrito activo en pedido                                                                             |
 | POST   | `/pedidos/:id/venta` | Personal del negocio (`Authorization: Bearer <ID token de Firebase>`) | Descuenta stock, registra el movimiento, crea la venta y marca el pedido como Entregado                           |
+| POST   | `/inventario/movimientos` | Personal del negocio (`Authorization: Bearer <ID token de Firebase>`) | Registra una entrada o salida manual de stock y su movimiento en una sola transacción |
 
 **`POST /pedidos`** — cuerpo:
 
@@ -39,6 +40,17 @@ Componente 2 de 3 de la solución: frontend ([`mitienda`](https://github.com/pau
 - Respuesta 201: `{ "correcto": true, "pedido_id", "numero_pedido", "total" }`.
 
 **`POST /pedidos/:id/venta`** — respuesta 201: `{ "correcto": true, "venta_id" }`.
+
+**`POST /inventario/movimientos`** — cuerpo:
+
+```json
+{ "producto_id": "...", "tipo": "entrada | salida", "cantidad": 5, "motivo": "Compra" }
+```
+
+- La cantidad debe ser un entero mayor que 0 (máximo 100000); el motivo se recorta a 100 caracteres.
+- El negocio sale del usuario autenticado. Un producto de otro negocio responde 403 y un producto inexistente, 404.
+- Una salida mayor que el stock disponible responde 409 y no cambia nada.
+- Respuesta 201: `{ "correcto": true, "movimiento_id", "stock" }` (stock resultante).
 
 **Errores:** todas las respuestas de error tienen la forma `{ "correcto": false, "error": "mensaje" }`.
 

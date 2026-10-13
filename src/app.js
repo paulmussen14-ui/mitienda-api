@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { crearPedido, registrarVenta } from "./pedidos.js";
+import { validarMovimiento, registrarMovimiento } from "./inventario.js";
 import { requerirUsuarioNegocio, requerirCliente } from "./autenticacion.js";
 import { ErrorApi } from "./errores.js";
 import { validarCheckout } from "./checkout.js";
@@ -66,6 +67,17 @@ export function crearApp() {
         pedidoId: req.params.id,
         negocioId: req.usuario.negocio_id,
       });
+      res.status(201).json({ correcto: true, ...resultado });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Entradas y salidas manuales de stock. Solo personal autenticado del negocio.
+  app.post("/inventario/movimientos", requerirUsuarioNegocio, async (req, res, next) => {
+    try {
+      const datos = validarMovimiento(req.body);
+      const resultado = await registrarMovimiento({ ...datos, negocioId: req.usuario.negocio_id });
       res.status(201).json({ correcto: true, ...resultado });
     } catch (error) {
       next(error);

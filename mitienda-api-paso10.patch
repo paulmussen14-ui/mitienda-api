@@ -1,0 +1,201 @@
+diff --git a/README.md b/README.md
+index 3790b43..6064d2d 100644
+--- a/README.md
++++ b/README.md
+@@ -17,6 +17,7 @@ Componente 2 de 3 de la solución: frontend ([`mitienda`](https://github.com/pau
+ | GET    | `/metrics`           | `Authorization: Bearer <METRICS_TOKEN>`                               | Métricas en formato Prometheus. Si `METRICS_TOKEN` no está definido, es público (solo recomendable en desarrollo) |
+ | POST   | `/pedidos`           | Cliente registrado (`Authorization: Bearer <ID token de Firebase>`)   | Convierte el carrito activo en pedido                                                                             |
+ | POST   | `/pedidos/:id/venta` | Personal del negocio (`Authorization: Bearer <ID token de Firebase>`) | Descuenta stock, registra el movimiento, crea la venta y marca el pedido como Entregado                           |
++| POST   | `/inventario/movimientos` | Personal del negocio (`Authorization: Bearer <ID token de Firebase>`) | Registra una entrada o salida manual de stock y su movimiento en una sola transacción |
+ 
+ **`POST /pedidos`** — cuerpo:
+ 
+@@ -40,6 +41,17 @@ Componente 2 de 3 de la solución: frontend ([`mitienda`](https://github.com/pau
+ 
+ **`POST /pedidos/:id/venta`** — respuesta 201: `{ "correcto": true, "venta_id" }`.
+ 
++**`POST /inventario/movimientos`** — cuerpo:
++
++```json
++{ "producto_id": "...", "tipo": "entrada | salida", "cantidad": 5, "motivo": "Compra" }
++```
++
++- La cantidad debe ser un entero mayor que 0 (máximo 100000); el motivo se recorta a 100 caracteres.
++- El negocio sale del usuario autenticado. Un producto de otro negocio responde 403 y un producto inexistente, 404.
++- Una salida mayor que el stock disponible responde 409 y no cambia nada.
++- Respuesta 201: `{ "correcto": true, "movimiento_id", "stock" }` (stock resultante).
++
+ **Errores:** todas las respuestas de error tienen la forma `{ "correcto": false, "error": "mensaje" }`.
+ 
+ | Código | Cuándo                                                                                                                             |
+diff --git a/src/app.js b/src/app.js
+index 46175be..c7f9469 100644
+--- a/src/app.js
++++ b/src/app.js
+@@ -1,6 +1,7 @@
+ import express from "express";
+ import cors from "cors";
+ import { crearPedido, registrarVenta } from "./pedidos.js";
++import { validarMovimiento, registrarMovimiento } from "./inventario.js";
+ import { requerirUsuarioNegocio, requerirCliente } from "./autenticacion.js";
+ import { ErrorApi } from "./errores.js";
+ import { validarCheckout } from "./checkout.js";
+@@ -72,6 +73,17 @@ export function crearApp() {
+     }
+   });
+ 
++  // Entradas y salidas manuales de stock. Solo personal autenticado del negocio.
++  app.post("/inventario/movimientos", requerirUsuarioNegocio, async (req, res, next) => {
++    try {
++      const datos = validarMovimiento(req.body);
++      const resultado = await registrarMovimiento({ ...datos, negocioId: req.usuario.negocio_id });
++      res.status(201).json({ correcto: true, ...resultado });
++    } catch (error) {
++      next(error);
++    }
++  });
++
+   app.use((_req, res) => res.status(404).json({ correcto: false, error: "Ruta no encontrada." }));
+ 
+   // eslint-disable-next-line no-unused-vars
+diff --git a/src/inventario.js b/src/inventario.js
+new file mode 100644
+index 0000000..1185620
+--- /dev/null
++++ b/src/inventario.js
+@@ -0,0 +1,72 @@
++import { FieldValue } from "firebase-admin/firestore";
++import { db } from "./firebase.js";
++import { ErrorApi } from "./errores.js";
++
++export const TIPOS_MOVIMIENTO = ["entrada", "salida"];
++const CANTIDAD_MAXIMA = 100000;
++
++/* Valida y normaliza el cuerpo de POST /inventario/movimientos. */
++export function validarMovimiento(cuerpo = {}) {
++  const { producto_id, tipo, cantidad, motivo } = cuerpo || {};
++
++  if (typeof producto_id !== "string" || !producto_id.trim() || producto_id.includes("/")) {
++    throw new ErrorApi(400, "Falta producto_id.");
++  }
++  if (!TIPOS_MOVIMIENTO.includes(tipo)) {
++    throw new ErrorApi(400, "Tipo de movimiento no válido (entrada o salida).");
++  }
++  if (!Number.isInteger(cantidad) || cantidad <= 0) {
++    throw new ErrorApi(400, "La cantidad debe ser un número entero mayor que 0.");
++  }
++  if (cantidad > CANTIDAD_MAXIMA) {
++    throw new ErrorApi(400, `La cantidad no puede superar ${CANTIDAD_MAXIMA}.`);
++  }
++
++  const motivoLimpio = typeof motivo === "string" ? motivo.trim().slice(0, 100) : "";
++  return {
++    productoId: producto_id.trim(),
++    tipo,
++    cantidad,
++    motivo: motivoLimpio || "Sin especificar",
++  };
++}
++
++/* REGISTRAR MOVIMIENTO MANUAL (antes en js/services/inventario.js)
++   Cambia el stock y crea el movimiento en una sola transacción: o se guardan los dos o ninguno.
++   El negocio sale del usuario autenticado, no del cuerpo. */
++export async function registrarMovimiento({ productoId, tipo, cantidad, motivo, negocioId }) {
++  const firestore = db();
++  const productoRef = firestore.collection("productos").doc(productoId);
++  const movimientoRef = firestore.collection("movimientos_inventario").doc();
++
++  const stock = await firestore.runTransaction(async (tx) => {
++    const snap = await tx.get(productoRef);
++    if (!snap.exists) throw new ErrorApi(404, "El producto no existe.");
++
++    const producto = snap.data();
++    if (producto.negocio_id !== negocioId) {
++      throw new ErrorApi(403, "El producto pertenece a otro negocio.");
++    }
++
++    const stockActual = Number(producto.stock) || 0;
++    if (tipo === "salida" && cantidad > stockActual) {
++      throw new ErrorApi(409, `No hay suficiente stock disponible. Disponible: ${stockActual}.`);
++    }
++
++    const nuevoStock = tipo === "entrada" ? stockActual + cantidad : stockActual - cantidad;
++
++    tx.update(productoRef, { stock: nuevoStock });
++    tx.set(movimientoRef, {
++      producto_id: productoId,
++      negocio_id: negocioId,
++      tipo,
++      cantidad,
++      motivo,
++      fecha: FieldValue.serverTimestamp(),
++    });
++
++    return nuevoStock;
++  });
++
++  return { movimiento_id: movimientoRef.id, stock };
++}
+diff --git a/test/inventario.test.js b/test/inventario.test.js
+new file mode 100644
+index 0000000..be1495d
+--- /dev/null
++++ b/test/inventario.test.js
+@@ -0,0 +1,57 @@
++import { test, before, after } from "node:test";
++import assert from "node:assert/strict";
++import { crearApp } from "../src/app.js";
++import { validarMovimiento } from "../src/inventario.js";
++import { ErrorApi } from "../src/errores.js";
++
++let servidor;
++let base;
++
++before(async () => {
++  servidor = crearApp().listen(0);
++  await new Promise((r) => servidor.once("listening", r));
++  base = `http://127.0.0.1:${servidor.address().port}`;
++});
++
++after(() => servidor.close());
++
++test("POST /inventario/movimientos sin token devuelve 401", async () => {
++  const res = await fetch(`${base}/inventario/movimientos`, {
++    method: "POST",
++    headers: { "Content-Type": "application/json" },
++    body: JSON.stringify({ producto_id: "p1", tipo: "entrada", cantidad: 5 }),
++  });
++  assert.equal(res.status, 401);
++});
++
++test("validarMovimiento normaliza un movimiento válido", () => {
++  const r = validarMovimiento({ producto_id: " p1 ", tipo: "salida", cantidad: 3, motivo: "  Merma  " });
++  assert.deepEqual(r, { productoId: "p1", tipo: "salida", cantidad: 3, motivo: "Merma" });
++});
++
++test("validarMovimiento usa «Sin especificar» si no hay motivo", () => {
++  assert.equal(validarMovimiento({ producto_id: "p1", tipo: "entrada", cantidad: 1 }).motivo, "Sin especificar");
++});
++
++test("validarMovimiento recorta el motivo a 100 caracteres", () => {
++  const r = validarMovimiento({ producto_id: "p1", tipo: "entrada", cantidad: 1, motivo: "x".repeat(300) });
++  assert.equal(r.motivo.length, 100);
++});
++
++for (const [nombre, cuerpo] of [
++  ["sin producto_id", { tipo: "entrada", cantidad: 1 }],
++  ["producto_id con barra", { producto_id: "a/b", tipo: "entrada", cantidad: 1 }],
++  ["tipo desconocido", { producto_id: "p1", tipo: "ajuste", cantidad: 1 }],
++  ["cantidad cero", { producto_id: "p1", tipo: "entrada", cantidad: 0 }],
++  ["cantidad negativa", { producto_id: "p1", tipo: "salida", cantidad: -2 }],
++  ["cantidad decimal", { producto_id: "p1", tipo: "entrada", cantidad: 1.5 }],
++  ["cantidad como texto", { producto_id: "p1", tipo: "entrada", cantidad: "5" }],
++  ["cantidad enorme", { producto_id: "p1", tipo: "entrada", cantidad: 1e9 }],
++]) {
++  test(`validarMovimiento rechaza ${nombre} con 400`, () => {
++    assert.throws(
++      () => validarMovimiento(cuerpo),
++      (e) => e instanceof ErrorApi && e.estado === 400
++    );
++  });
++}
