@@ -30,7 +30,12 @@ export function middlewareMonitoreo(req, res, next) {
 
     // Nivel según el estado: los 5xx son incidentes, los 401/403 se vigilan (posible abuso).
     const nivel = estado >= 500 ? "error" : estado === 401 || estado === 403 ? "alerta" : "info";
-    if (process.env.NODE_ENV !== "test") {
+    // /health (Render, UptimeRobot) y /metrics (Grafana) se consultan cada pocos segundos o minutos.
+    // Si responden bien no se escriben en el log, para que las incidencias reales no queden
+    // enterradas; las métricas sí los cuentan y, si fallan, sí se registran.
+    const rutaDeSistema = ruta === "/health" || ruta === "/metrics";
+    const silenciar = rutaDeSistema && estado < 400;
+    if (process.env.NODE_ENV !== "test" && !silenciar) {
       console.log(
         JSON.stringify({
           fecha: new Date().toISOString(),
