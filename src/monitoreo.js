@@ -36,17 +36,22 @@ export function middlewareMonitoreo(req, res, next) {
     const rutaDeSistema = ruta === "/health" || ruta === "/metrics";
     const silenciar = rutaDeSistema && estado < 400;
     if (process.env.NODE_ENV !== "test" && !silenciar) {
-      console.log(
-        JSON.stringify({
-          fecha: new Date().toISOString(),
-          nivel,
-          ambiente: AMBIENTE,
-          metodo: req.method,
-          ruta,
-          estado,
-          duracion_ms: Math.round(ms),
-        })
-      );
+      const registro = {
+        fecha: new Date().toISOString(),
+        nivel,
+        ambiente: AMBIENTE,
+        metodo: req.method,
+        ruta,
+        estado,
+        duracion_ms: Math.round(ms),
+      };
+      // Solo en los rechazos de autenticación se guarda el origen, para poder distinguir
+      // una prueba propia de un intento externo. En el resto de peticiones no se registra.
+      if (estado === 401 || estado === 403) {
+        registro.ip = req.ip;
+        registro.user_agent = String(req.headers["user-agent"] || "").slice(0, 120);
+      }
+      console.log(JSON.stringify(registro));
     }
   });
   next();

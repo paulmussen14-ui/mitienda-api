@@ -8,6 +8,8 @@ import { middlewareMonitoreo, estadoSalud, metricasPrometheus } from "./monitore
 
 export function crearApp() {
   const app = express();
+  // Render (y Azure) ponen un proxy delante: sin esto req.ip sería siempre la IP del proxy.
+  app.set("trust proxy", 1);
 
   const origenes = (
     process.env.CORS_ORIGINS ||

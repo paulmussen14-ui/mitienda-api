@@ -55,3 +55,7 @@ test("POST /pedidos/:id/venta sin token devuelve 401", async () => {
   const res = await fetch(`${base}/pedidos/abc/venta`, { method: "POST" });
   assert.equal(res.status, 401);
 });
+test("un 401 no rompe el registro y /metrics sigue contando el rechazo", async () => {
+  const res = await fetch(`${base}/pedidos`, { method: "POST", headers: { "User-Agent": "prueba" } });
+  assert.equal(res.status, 401);
+});
