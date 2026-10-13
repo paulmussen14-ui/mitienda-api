@@ -49,6 +49,7 @@ export function middlewareMonitoreo(req, res, next) {
       // una prueba propia de un intento externo. En el resto de peticiones no se registra.
       if (estado === 401 || estado === 403) {
         registro.ip = req.ip;
+        registro.x_forwarded_for = String(req.headers["x-forwarded-for"] || "").slice(0, 120);
         registro.user_agent = String(req.headers["user-agent"] || "").slice(0, 120);
       }
       console.log(JSON.stringify(registro));
