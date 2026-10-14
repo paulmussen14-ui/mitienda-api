@@ -1,0 +1,81 @@
+diff --git a/.gitignore b/.gitignore
+index 9c1e6ca..7350699 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,3 +1,4 @@
+ node_modules
+ .env
+-serviceAccount*.json
+\ No newline at end of file
++serviceAccount*.json
++monitoreo/metrics_token
+diff --git a/README.md b/README.md
+index 6064d2d..7dbe190 100644
+--- a/README.md
++++ b/README.md
+@@ -167,6 +167,18 @@ sum(rate(mitienda_peticiones_total{estado=~"401|403"}[5m]))
+ | 409 "Stock insuficiente..."                        | La cantidad pedida supera el stock                                             | Reponer stock o ajustar el pedido                                                                 |
+ | 5xx                                                | Error interno                                                                  | Buscar la línea `error` y el mensaje "Error interno" en los logs de Render                        |
+ 
++### Prometheus local (desarrollo)
++
++Para ver las métricas con un servidor Prometheus propio (además de Grafana Cloud en producción):
++
++1. Inicia la API: `npm run dev` (puerto 8080).
++2. Inicia Prometheus: `docker compose -f docker-compose.monitoreo.yml up -d`.
++3. Abre http://localhost:9090 → **Status → Targets**: `mitienda-api-local` debe estar en **UP**.
++4. En **Graph**, prueba consultas como `mitienda_peticiones_total`, `mitienda_uptime_segundos` o `rate(mitienda_peticiones_total[1m])`.
++5. Para apagarlo: `docker compose -f docker-compose.monitoreo.yml down`.
++
++La configuración está en `monitoreo/prometheus.yml`. El job de producción viene comentado: usa el mismo `METRICS_TOKEN` desde un archivo local `monitoreo/metrics_token` que no se sube a Git.
++
+ ## Pruebas
+ 
+ ```bash
+diff --git a/docker-compose.monitoreo.yml b/docker-compose.monitoreo.yml
+new file mode 100644
+index 0000000..244e249
+--- /dev/null
++++ b/docker-compose.monitoreo.yml
+@@ -0,0 +1,15 @@
++# Prometheus local para desarrollo. Uso:
++#   1) npm run dev            (API en http://localhost:8080)
++#   2) docker compose -f docker-compose.monitoreo.yml up -d
++#   3) abrir http://localhost:9090 -> Status -> Targets
++services:
++  prometheus:
++    image: prom/prometheus:v2.55.1
++    ports:
++      - "9090:9090"
++    volumes:
++      - ./monitoreo/prometheus.yml:/etc/prometheus/prometheus.yml:ro
++      # Descomenta solo si activas el job de producción (el archivo debe existir):
++      # - ./monitoreo/metrics_token:/etc/prometheus/metrics_token:ro
++    extra_hosts:
++      - "host.docker.internal:host-gateway"
+diff --git a/monitoreo/prometheus.yml b/monitoreo/prometheus.yml
+new file mode 100644
+index 0000000..aaab739
+--- /dev/null
++++ b/monitoreo/prometheus.yml
+@@ -0,0 +1,20 @@
++# Prometheus local de MiTienda (ambiente de desarrollo).
++# Lee /metrics de la API que corre en tu computador (npm run dev, puerto 8080).
++global:
++  scrape_interval: 15s
++
++scrape_configs:
++  - job_name: mitienda-api-local
++    metrics_path: /metrics
++    static_configs:
++      - targets: ["host.docker.internal:8080"]
++
++  # Producción (opcional). /metrics exige el token: guárdalo en monitoreo/metrics_token
++  # (una sola línea, sin comillas; el archivo está en .gitignore) y quita el # de estas líneas.
++  # - job_name: mitienda-api-produccion
++  #   scheme: https
++  #   metrics_path: /metrics
++  #   scrape_interval: 1m
++  #   bearer_token_file: /etc/prometheus/metrics_token
++  #   static_configs:
++  #     - targets: ["mitienda-api-dcd6.onrender.com"]

@@ -1,0 +1,20 @@
+# Prometheus local de MiTienda (ambiente de desarrollo).
+# Lee /metrics de la API que corre en tu computador (npm run dev, puerto 8080).
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: mitienda-api-local
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:8080"]
+
+  # Producción (opcional). /metrics exige el token: guárdalo en monitoreo/metrics_token
+  # (una sola línea, sin comillas; el archivo está en .gitignore) y quita el # de estas líneas.
+  # - job_name: mitienda-api-produccion
+  #   scheme: https
+  #   metrics_path: /metrics
+  #   scrape_interval: 1m
+  #   bearer_token_file: /etc/prometheus/metrics_token
+  #   static_configs:
+  #     - targets: ["mitienda-api-dcd6.onrender.com"]

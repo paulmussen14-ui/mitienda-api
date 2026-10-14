@@ -1,0 +1,15 @@
+# Prometheus local para desarrollo. Uso:
+#   1) npm run dev            (API en http://localhost:8080)
+#   2) docker compose -f docker-compose.monitoreo.yml up -d
+#   3) abrir http://localhost:9090 -> Status -> Targets
+services:
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoreo/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # Descomenta solo si activas el job de producción (el archivo debe existir):
+      # - ./monitoreo/metrics_token:/etc/prometheus/metrics_token:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

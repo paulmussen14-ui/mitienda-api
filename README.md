@@ -167,6 +167,18 @@ sum(rate(mitienda_peticiones_total{estado=~"401|403"}[5m]))
 | 409 "Stock insuficiente..."                        | La cantidad pedida supera el stock                                             | Reponer stock o ajustar el pedido                                                                 |
 | 5xx                                                | Error interno                                                                  | Buscar la línea `error` y el mensaje "Error interno" en los logs de Render                        |
 
+### Prometheus local (desarrollo)
+
+Para ver las métricas con un servidor Prometheus propio (además de Grafana Cloud en producción):
+
+1. Inicia la API: `npm run dev` (puerto 8080).
+2. Inicia Prometheus: `docker compose -f docker-compose.monitoreo.yml up -d`.
+3. Abre http://localhost:9090 → **Status → Targets**: `mitienda-api-local` debe estar en **UP**.
+4. En **Graph**, prueba consultas como `mitienda_peticiones_total`, `mitienda_uptime_segundos` o `rate(mitienda_peticiones_total[1m])`.
+5. Para apagarlo: `docker compose -f docker-compose.monitoreo.yml down`.
+
+La configuración está en `monitoreo/prometheus.yml`. El job de producción viene comentado: usa el mismo `METRICS_TOKEN` desde un archivo local `monitoreo/metrics_token` que no se sube a Git.
+
 ## Pruebas
 
 ```bash
